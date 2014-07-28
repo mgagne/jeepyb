@@ -500,16 +500,26 @@ def process_acls(acl_config, project, ACL_DIR, section,
         git_command(repo_path, 'branch -D config')
 
 
-def create_gerrit_project(project, project_list, gerrit):
+def create_gerrit_project(project, description, project_list, gerrit):
     if project not in project_list:
         try:
-            gerrit.createProject(project)
+            gerrit.createProject(project, True, False, description)
             return True
         except Exception:
             log.exception(
                 "Exception creating %s in Gerrit." % project)
             raise
     return False
+
+
+def update_gerrit_project_description(project, description, gerrit):
+    try:
+        gerrit.updateProject(project, 'description', description)
+        return True
+    except Exception:
+        log.exception(
+            "Exception updating %s description in Gerrit" % project)
+        raise
 
 
 def create_local_mirror(local_git_dir, project_git,
@@ -564,7 +574,20 @@ def main():
                                      GERRIT_USER,
                                      GERRIT_PORT,
                                      GERRIT_KEY)
-    project_list = gerrit.listProjects()
+
+    # get list and convert it to dict with
+    # keypairs project_name=description
+    project_list = gerrit.listProjects(True)
+    projects = {}
+    for project in project_list:
+        # project comes in format: project_name - description
+        project_set = project.split(' - ', 1)
+        if len(project_set) > 1:
+            project_description = project_set[1]
+        else:
+            project_description = ''
+        projects[project_set[0]] = project_description
+
     ssh_env = make_ssh_wrapper(GERRIT_USER, GERRIT_KEY)
     try:
 
@@ -600,12 +623,22 @@ def main():
                 acl_config = section.get(
                     'acl-config',
                     '%s.config' % os.path.join(ACL_DIR, project))
+                description = (
+                    find_description_override(repo_path) or description)
 
                 # Create the project in Gerrit first, since it will fail
                 # spectacularly if its project directory or local replica
                 # already exist on disk
                 project_created = create_gerrit_project(
-                    project, project_list, gerrit)
+                    project, description, projects, gerrit)
+
+                # if descriptions differ, update it
+                if project in projects:
+                    old_description = projects[project]
+                    if old_description != description and \
+                            description is not None:
+                        update_gerrit_project_description(
+                            project, description, gerrit)
 
                 # Create the repo for the local git mirror
                 create_local_mirror(
@@ -617,7 +650,7 @@ def main():
 
                     # Make Local repo
                     push_string = make_local_copy(
-                        repo_path, project, project_list,
+                        repo_path, project, projects,
                         git_opts, ssh_env, upstream, GERRIT_HOST, GERRIT_PORT,
                         project_git, GERRIT_GITID)
                 else:
@@ -625,9 +658,6 @@ def main():
                     # in shape to have work done.
                     update_local_copy(
                         repo_path, track_upstream, git_opts, ssh_env)
-
-                description = (
-                    find_description_override(repo_path) or description)
 
                 if project_created:
                     push_to_gerrit(
