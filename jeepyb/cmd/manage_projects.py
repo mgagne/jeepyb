@@ -72,6 +72,14 @@ registry = u.ProjectsRegistry()
 log = logging.getLogger("manage_projects")
 
 
+GERRIT_BUILTIN_GROUPS = {
+    'Anonymous Users': 'global:Anonymous-Users',
+    'Project Owners': 'global:Project-Owners',
+    'Registered Users': 'global:Registered-Users',
+    'Change Owner': 'global:Change-Owner',
+}
+
+
 class FetchConfigException(Exception):
     pass
 
@@ -221,6 +229,8 @@ def get_group_uuid(gerrit, group):
     uuid = _get_group_uuid(group)
     if uuid:
         return uuid
+    if group in GERRIT_BUILTIN_GROUPS:
+        return GERRIT_BUILTIN_GROUPS[group]
     gerrit.createGroup(group)
     uuid = _get_group_uuid(group)
     if uuid:
