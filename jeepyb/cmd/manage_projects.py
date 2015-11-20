@@ -588,6 +588,7 @@ def main():
     # get list and convert it to dict with
     # keypairs project_name=description
     project_list = gerrit.listProjects(True)
+    project_list.append('All-Projects')
     projects = {}
     for project in project_list:
         # project comes in format: project_name - description
