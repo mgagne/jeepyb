@@ -24,6 +24,8 @@
 # gerrit-key=/home/gerrit2/review_site/etc/ssh_host_rsa_key
 # gerrit-committer=Project Creator <openstack-infra@lists.openstack.org>
 # gerrit-replicate=True
+# github-api-url=https://api.github.com
+# github-team=gerrit
 # has-github=True
 # has-wiki=False
 # has-issues=False
@@ -42,6 +44,7 @@
 #    - track-upstream
 #   homepage: Some homepage that isn't http://openstack.org
 #   description: This is a great project
+#   github-org: openstack-dev
 #   upstream: https://gerrit.googlesource.com/gerrit
 #   upstream-prefix: upstream
 #   acl-config: /path/to/gerrit/project.config
@@ -277,7 +280,8 @@ def make_ssh_wrapper(gerrit_user, gerrit_key):
 
 def create_github_project(
         default_has_issues, default_has_downloads, default_has_wiki,
-        github_secure_config, options, project, description, homepage):
+        github_api_url, github_secure_config, github_team, options,
+        project, description, homepage, github_org=None):
     created = False
     has_issues = 'has-issues' in options or default_has_issues
     has_downloads = 'has-downloads' in options or default_has_downloads
@@ -288,20 +292,22 @@ def create_github_project(
 
     # Project creation doesn't work via oauth
     ghub = github.Github(secure_config.get("github", "username"),
-                         secure_config.get("github", "password"))
+                         secure_config.get("github", "password"),
+                         base_url=github_api_url)
     orgs = ghub.get_user().get_orgs()
     orgs_dict = dict(zip([o.login.lower() for o in orgs], orgs))
 
     # Find the project's repo
     project_split = project.split('/', 1)
-    org_name = project_split[0]
+    if not github_org:
+        github_org = project_split[0]
     if len(project_split) > 1:
         repo_name = project_split[1]
     else:
         repo_name = project
 
     try:
-        org = orgs_dict[org_name.lower()]
+        org = orgs_dict[github_org.lower()]
     except KeyError:
         # We do not have control of this github org ignore the project.
         return False
@@ -321,10 +327,10 @@ def create_github_project(
                   has_downloads=has_downloads,
                   has_wiki=has_wiki)
 
-        if 'gerrit' not in [team.name for team in repo.get_teams()]:
+        if github_team not in [team.name for team in repo.get_teams()]:
             teams = org.get_teams()
             teams_dict = dict(zip([t.name.lower() for t in teams], teams))
-            teams_dict['gerrit'].add_to_repos(repo)
+            teams_dict[github_team].add_to_repos(repo)
         created = True
 
     return created
@@ -576,6 +582,9 @@ def main():
     DEFAULT_HAS_ISSUES = registry.get_defaults('has-issues', False)
     DEFAULT_HAS_DOWNLOADS = registry.get_defaults('has-downloads', False)
     DEFAULT_HAS_WIKI = registry.get_defaults('has-wiki', False)
+    GITHUB_API_URL = registry.get_defaults('github-api-url',
+                                           'https://api.github.com')
+    GITHUB_TEAM = registry.get_defaults('github-team', 'gerrit')
     GITHUB_SECURE_CONFIG = registry.get_defaults(
         'github-config',
         '/etc/github/github-projects.secure.config')
@@ -614,6 +623,7 @@ def main():
                 options = section.get('options', dict())
                 description = section.get('description', None)
                 homepage = section.get('homepage', DEFAULT_HOMEPAGE)
+                github_org = section.get('github-org', None)
                 upstream = section.get('upstream', None)
                 upstream_prefix = section.get('upstream-prefix', None)
                 track_upstream = 'track-upstream' in options
@@ -690,8 +700,9 @@ def main():
                 if 'has-github' in options or default_has_github:
                     created = create_github_project(
                         DEFAULT_HAS_ISSUES, DEFAULT_HAS_DOWNLOADS,
-                        DEFAULT_HAS_WIKI, GITHUB_SECURE_CONFIG,
-                        options, project, description, homepage)
+                        DEFAULT_HAS_WIKI, GITHUB_API_URL,
+                        GITHUB_SECURE_CONFIG, GITHUB_TEAM, options,
+                        project, description, homepage, github_org)
                     if created and GERRIT_REPLICATE:
                         gerrit.replicate(project)
 

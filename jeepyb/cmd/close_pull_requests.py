@@ -80,18 +80,25 @@ def main():
     else:
         pull_request_text = MESSAGE
 
-    GITHUB_SECURE_CONFIG = os.environ.get('GITHUB_SECURE_CONFIG',
-                                          '/etc/github/github.secure.config')
+    registry = u.ProjectsRegistry()
+
+    GITHUB_SECURE_CONFIG = registry.get_defaults(
+        'github-config',
+        os.environ.get('GITHUB_SECURE_CONFIG',
+                       '/etc/github/github-projects.secure.config'))
+    GITHUB_API_URL = registry.get_defaults('github-api-url',
+                                           'https://api.github.com')
 
     secure_config = ConfigParser.ConfigParser()
     secure_config.read(GITHUB_SECURE_CONFIG)
-    registry = u.ProjectsRegistry()
 
     if secure_config.has_option("github", "oauth_token"):
-        ghub = github.Github(secure_config.get("github", "oauth_token"))
+        ghub = github.Github(secure_config.get("github", "oauth_token"),
+                             base_url=GITHUB_API_URL)
     else:
         ghub = github.Github(secure_config.get("github", "username"),
-                             secure_config.get("github", "password"))
+                             secure_config.get("github", "password"),
+                             base_url=GITHUB_API_URL)
 
     orgs = ghub.get_user().get_orgs()
     orgs_dict = dict(zip([o.login.lower() for o in orgs], orgs))
