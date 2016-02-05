@@ -447,7 +447,7 @@ def update_local_copy(repo_path, track_upstream, git_opts, ssh_env):
     # TODO(mordred): This is here so that later we can
     # inspect the master branch for meta-info
     # Checkout master and reset to the state of origin/master
-    git_command(repo_path, "checkout -B master origin/master")
+    git_command(repo_path, "checkout -B master origin/master", env=ssh_env)
 
 
 def push_to_gerrit(repo_path, project, push_string, remote_url, ssh_env):
