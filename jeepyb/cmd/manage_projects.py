@@ -290,10 +290,13 @@ def create_github_project(
     secure_config = ConfigParser.ConfigParser()
     secure_config.read(github_secure_config)
 
-    # Project creation doesn't work via oauth
-    ghub = github.Github(secure_config.get("github", "username"),
-                         secure_config.get("github", "password"),
-                         base_url=github_api_url)
+    if secure_config.has_option("github", "oauth_token"):
+        ghub = github.Github(secure_config.get("github", "oauth_token"),
+                             base_url=github_api_url)
+    else:
+        ghub = github.Github(secure_config.get("github", "username"),
+                             secure_config.get("github", "password"),
+                             base_url=github_api_url)
     orgs = ghub.get_user().get_orgs()
     orgs_dict = dict(zip([o.login.lower() for o in orgs], orgs))
 
